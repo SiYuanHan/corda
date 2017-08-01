@@ -58,6 +58,8 @@ class CashTests : TestDependencyInjectionBase() {
         database = databaseAndServices.first
         miniCorpServices = databaseAndServices.second
 
+        miniCorpServices = databaseAndServices.second
+
         database.transaction {
             miniCorpServices.fillWithSomeTestCash(howMuch = 100.DOLLARS, atLeastThisManyStates = 1, atMostThisManyStates = 1,
                     issuedBy = MEGA_CORP.ref(1), issuerKey = MEGA_CORP_KEY, ownedBy = OUR_IDENTITY_1)
