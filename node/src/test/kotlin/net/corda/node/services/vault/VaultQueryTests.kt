@@ -74,7 +74,7 @@ class VaultQueryTests : TestDependencyInjectionBase() {
     @Ignore
     @Test
     fun createPersistentTestDb() {
-        val database = configureDatabase(makePersistentDataSourceProperties(), databaseProperties = makeTestDatabaseProperties())
+        val database = configureDatabase(makePersistentDataSourceProperties(), makeTestDatabaseProperties())
 
         setUpDb(database, 5000)
 
