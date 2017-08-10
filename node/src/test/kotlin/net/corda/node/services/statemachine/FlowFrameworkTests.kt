@@ -62,7 +62,7 @@ class FlowFrameworkTests {
     }
 
     private val mockNet = MockNetwork(servicePeerAllocationStrategy = RoundRobin())
-    private val sessionTransfers = ArrayList<SessionTransfer>()
+    private val receivedSessionMessages = ArrayList<SessionTransfer>()
     private lateinit var node1: MockNode
     private lateinit var node2: MockNode
     private lateinit var notary1: MockNode
@@ -81,7 +81,7 @@ class FlowFrameworkTests {
         notary1 = mockNet.createNotaryNode(networkMapAddress = node1.network.myAddress, overrideServices = overrideServices, serviceName = notaryService.name)
         notary2 = mockNet.createNotaryNode(networkMapAddress = node1.network.myAddress, overrideServices = overrideServices, serviceName = notaryService.name)
 
-        mockNet.messagingNetwork.receivedMessages.toSessionTransfers().forEach { sessionTransfers += it }
+        receivedSessionMessagesObservable().forEach { receivedSessionMessages += it }
         mockNet.runNetwork()
 
         // We don't create a network map, so manually handle registrations
@@ -96,7 +96,7 @@ class FlowFrameworkTests {
     @After
     fun cleanUp() {
         mockNet.stopNodes()
-        sessionTransfers.clear()
+        receivedSessionMessages.clear()
     }
 
     @Test
@@ -228,7 +228,7 @@ class FlowFrameworkTests {
         node2b.smm.executor.flush()
         fut1.getOrThrow()
 
-        val receivedCount = sessionTransfers.count { it.isPayloadTransfer }
+        val receivedCount = receivedSessionMessages.count { it.isPayloadTransfer }
         // Check flows completed cleanly and didn't get out of phase
         assertEquals(4, receivedCount, "Flow should have exchanged 4 unique messages")// Two messages each way
         // can't give a precise value as every addMessageHandler re-runs the undelivered messages
@@ -319,7 +319,8 @@ class FlowFrameworkTests {
                 node2 sent sessionData(20L) to node1,
                 node1 sent sessionData(11L) to node2,
                 node2 sent sessionData(21L) to node1,
-                node1 sent normalEnd to node2
+                node1 sent normalEnd to node2,
+                node2 sent normalEnd to node1
         )
     }
 
@@ -344,7 +345,7 @@ class FlowFrameworkTests {
         val notary1Address: MessageRecipients = endpoint.getAddressOfParty(notary1.services.networkMapCache.getPartyInfo(notary1.info.notaryIdentity)!!)
         assertThat(notary1Address).isInstanceOf(InMemoryMessagingNetwork.ServiceHandle::class.java)
         assertEquals(notary1Address, endpoint.getAddressOfParty(notary2.services.networkMapCache.getPartyInfo(notary2.info.notaryIdentity)!!))
-        sessionTransfers.expectEvents(isStrict = false) {
+        receivedSessionMessages.expectEvents(isStrict = false) {
             sequence(
                     // First Pay
                     expect(match = { it.message is SessionInit && it.message.initiatingFlowClass == NotaryFlow.Client::class.java.name }) {
@@ -388,6 +389,33 @@ class FlowFrameworkTests {
         assertThatExceptionOfType(UnexpectedFlowEndException::class.java).isThrownBy {
             resultFuture.getOrThrow()
         }.withMessageContaining(String::class.java.name)  // Make sure the exception message mentions the type the flow was expecting to receive
+    }
+
+    @Test
+    fun `receiving unexpected session end before entering sendAndReceive`() {
+        node2.registerFlowFactory(WaitForOtherSideEndBeforeSendAndReceive::class) { NoOpFlow() }
+        val sessionEndReceived = receivedSessionMessagesObservable().filter { it.message is SessionEnd }.toFuture()
+        val resultFuture = node1.services.startFlow(
+                WaitForOtherSideEndBeforeSendAndReceive(node2.info.legalIdentity, sessionEndReceived)).resultFuture
+        mockNet.runNetwork()
+        assertThatExceptionOfType(UnexpectedFlowEndException::class.java).isThrownBy {
+            resultFuture.getOrThrow()
+        }
+    }
+
+    @InitiatingFlow
+    private class WaitForOtherSideEndBeforeSendAndReceive(val otherParty: Party,
+                                                          @Transient val receivedOtherFlowEnd: CordaFuture<*>) : FlowLogic<Unit>() {
+        @Suspendable
+        override fun call() {
+            // Kick off the flow on the other side ...
+            send(otherParty, 1)
+            // ... then pause this one until it's received the session-end message from the other side
+            val thisFiber = Fiber.currentStrand()
+            receivedOtherFlowEnd.then { Fiber.unpark(thisFiber) }
+            Fiber.park()
+            sendAndReceive<Int>(otherParty, 2)
+        }
     }
 
     @Test
@@ -456,7 +484,7 @@ class FlowFrameworkTests {
                 node2 sent erroredEnd(erroringFlow.get().exceptionThrown) to node1
         )
         // Make sure the original stack trace isn't sent down the wire
-        assertThat((sessionTransfers.last().message as ErrorSessionEnd).errorResponse!!.stackTrace).isEmpty()
+        assertThat((receivedSessionMessages.last().message as ErrorSessionEnd).errorResponse!!.stackTrace).isEmpty()
     }
 
     @Test
@@ -630,7 +658,7 @@ class FlowFrameworkTests {
     fun `upgraded flow`() {
         node1.services.startFlow(UpgradedFlow(node2.info.legalIdentity))
         mockNet.runNetwork()
-        assertThat(sessionTransfers).startsWith(
+        assertThat(receivedSessionMessages).startsWith(
                 node1 sent sessionInit(UpgradedFlow::class, 2) to node2
         )
     }
@@ -662,8 +690,8 @@ class FlowFrameworkTests {
     fun `unknown class in session init`() {
         node1.sendSessionMessage(SessionInit(random63BitValue(), "not.a.real.Class", 1, null), node2)
         mockNet.runNetwork()
-        assertThat(sessionTransfers).hasSize(2) // Only the session-init and session-reject are expected
-        val reject = sessionTransfers.last().message as SessionReject
+        assertThat(receivedSessionMessages).hasSize(2) // Only the session-init and session-reject are expected
+        val reject = receivedSessionMessages.last().message as SessionReject
         assertThat(reject.errorMessage).isEqualTo("Don't know not.a.real.Class")
     }
 
@@ -671,8 +699,8 @@ class FlowFrameworkTests {
     fun `non-flow class in session init`() {
         node1.sendSessionMessage(SessionInit(random63BitValue(), String::class.java.name, 1, null), node2)
         mockNet.runNetwork()
-        assertThat(sessionTransfers).hasSize(2) // Only the session-init and session-reject are expected
-        val reject = sessionTransfers.last().message as SessionReject
+        assertThat(receivedSessionMessages).hasSize(2) // Only the session-init and session-reject are expected
+        val reject = receivedSessionMessages.last().message as SessionReject
         assertThat(reject.errorMessage).isEqualTo("${String::class.java.name} is not a flow")
     }
 
@@ -738,11 +766,11 @@ class FlowFrameworkTests {
     }
 
     private fun assertSessionTransfers(vararg expected: SessionTransfer) {
-        assertThat(sessionTransfers).containsExactly(*expected)
+        assertThat(receivedSessionMessages).containsExactly(*expected)
     }
 
     private fun assertSessionTransfers(node: MockNode, vararg expected: SessionTransfer): List<SessionTransfer> {
-        val actualForNode = sessionTransfers.filter { it.from == node.id || it.to == node.network.myAddress }
+        val actualForNode = receivedSessionMessages.filter { it.from == node.id || it.to == node.network.myAddress }
         assertThat(actualForNode).containsExactly(*expected)
         return actualForNode
     }
@@ -750,6 +778,10 @@ class FlowFrameworkTests {
     private data class SessionTransfer(val from: Int, val message: SessionMessage, val to: MessageRecipients) {
         val isPayloadTransfer: Boolean get() = message is SessionData || message is SessionInit && message.firstPayload != null
         override fun toString(): String = "$from sent $message to $to"
+    }
+
+    private fun receivedSessionMessagesObservable(): Observable<SessionTransfer> {
+        return mockNet.messagingNetwork.receivedMessages.toSessionTransfers()
     }
 
     private fun Observable<MessageTransfer>.toSessionTransfers(): Observable<SessionTransfer> {
