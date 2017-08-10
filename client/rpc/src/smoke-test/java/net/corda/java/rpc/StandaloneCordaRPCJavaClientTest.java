@@ -7,8 +7,8 @@ import net.corda.core.messaging.DataFeed;
 import net.corda.core.messaging.FlowHandle;
 import net.corda.core.node.NodeInfo;
 import net.corda.core.node.services.NetworkMapCache;
+import net.corda.core.transactions.SignedTransaction;
 import net.corda.core.utilities.OpaqueBytes;
-import net.corda.flows.AbstractCashFlow;
 import net.corda.flows.CashIssueFlow;
 import net.corda.nodeapi.User;
 import net.corda.smoketesting.NodeConfig;
@@ -43,7 +43,7 @@ public class StandaloneCordaRPCJavaClientTest {
             port.getAndIncrement(),
             port.getAndIncrement(),
             Collections.singletonList("corda.notary.validating"),
-            Arrays.asList(rpcUser),
+            Collections.singletonList(rpcUser),
             null
     );
 
@@ -73,7 +73,7 @@ public class StandaloneCordaRPCJavaClientTest {
     public void testCashBalances() throws NoSuchFieldException, ExecutionException, InterruptedException {
         Amount<Currency> dollars123 = new Amount<>(123, Currency.getInstance("USD"));
 
-        FlowHandle<AbstractCashFlow.Result> flowHandle = rpcProxy.startFlowDynamic(CashIssueFlow.class,
+        FlowHandle<SignedTransaction> flowHandle = rpcProxy.startFlowDynamic(CashIssueFlow.class,
                 dollars123, OpaqueBytes.of("1".getBytes()),
                 notaryNode.getLegalIdentity(), notaryNode.getLegalIdentity());
         System.out.println("Started issuing cash, waiting on result");

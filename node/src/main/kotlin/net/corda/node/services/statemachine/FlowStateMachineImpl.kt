@@ -10,9 +10,9 @@ import net.corda.core.crypto.random63BitValue
 import net.corda.core.flows.*
 import net.corda.core.identity.Party
 import net.corda.core.internal.FlowStateMachine
+import net.corda.core.internal.abbreviate
 import net.corda.core.internal.concurrent.OpenFuture
 import net.corda.core.internal.concurrent.openFuture
-import net.corda.core.internal.abbreviate
 import net.corda.core.internal.staticField
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.*
@@ -25,7 +25,6 @@ import net.corda.node.utilities.DatabaseTransaction
 import net.corda.node.utilities.DatabaseTransactionManager
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.sql.Connection
 import java.sql.SQLException
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -332,11 +331,27 @@ class FlowStateMachineImpl<R>(override val id: StateMachineRunId,
 
     @Suspendable
     private fun ReceiveRequest<*>.suspendAndExpectReceive(): ReceivedSessionMessage<*> {
-        fun pollForMessage() = session.receivedMessages.poll()
+        fun pollForMessage(): ReceivedSessionMessage<*>? {
+            val polled = session.receivedMessages.poll()
+//            if (polled?.message is SessionEnd) {
+//                openSessions.values.remove(session)
+//                if (polled.message is ErrorSessionEnd) {
+//                    session.erroredEnd(polled.message)
+//                } else {
+//                    val expectedType = userReceiveType?.name ?: receiveType.simpleName
+//                    throw UnexpectedFlowEndException("Counterparty flow on ${session.state.sendToParty} has completed without " +
+//                            "sending a $expectedType")
+//                }
+//            }
+            return polled
+        }
 
         val polledMessage = pollForMessage()
         return if (polledMessage != null) {
             if (this is SendAndReceive) {
+                if (polledMessage.message is ErrorSessionEnd) {
+                    println("received ${polledMessage.message} and about to suspen to do a send... ($this)")
+                }
                 // We've already received a message but we suspend so that the send can be performed
                 suspend(this)
             }

@@ -304,6 +304,7 @@ class StateMachineManager(val serviceHub: ServiceHubInternal,
                 }
             }
             if (message is SessionEnd) {
+                println(">>>> $message ${session.fiber.waitingForResponse}")
                 openSessions.remove(message.recipientSessionId)
             }
             session.receivedMessages += ReceivedSessionMessage(sender, message)

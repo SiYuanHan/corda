@@ -11,6 +11,7 @@ import net.corda.core.node.services.queryBy
 import net.corda.core.node.services.vault.DEFAULT_PAGE_NUM
 import net.corda.core.node.services.vault.PageSpecification
 import net.corda.core.node.services.vault.QueryCriteria.VaultQueryCriteria
+import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.OpaqueBytes
 import net.corda.core.utilities.ProgressTracker
@@ -20,11 +21,11 @@ import java.util.*
  * Initiates a flow that produces an cash exit transaction.
  *
  * @param amount the amount of a currency to remove from the ledger.
- * @param issuerRef the reference on the issued currency. Added to the node's legal identity to determine the
+ * @param issueRef the reference on the issued currency. Added to the node's legal identity to determine the
  * issuer.
  */
 @StartableByRPC
-class CashExitFlow(val amount: Amount<Currency>, val issueRef: OpaqueBytes, progressTracker: ProgressTracker) : AbstractCashFlow<AbstractCashFlow.Result>(progressTracker) {
+class CashExitFlow(val amount: Amount<Currency>, val issueRef: OpaqueBytes, progressTracker: ProgressTracker) : AbstractCashFlow(progressTracker) {
     constructor(amount: Amount<Currency>, issueRef: OpaqueBytes) : this(amount, issueRef, tracker())
 
     companion object {
@@ -37,7 +38,7 @@ class CashExitFlow(val amount: Amount<Currency>, val issueRef: OpaqueBytes, prog
      */
     @Suspendable
     @Throws(CashException::class)
-    override fun call(): AbstractCashFlow.Result {
+    override fun call(): SignedTransaction {
         progressTracker.currentStep = GENERATING_TX
         val builder: TransactionBuilder = TransactionBuilder(notary = null as Party?)
         val issuer = serviceHub.myInfo.legalIdentity.ref(issueRef)
@@ -64,11 +65,9 @@ class CashExitFlow(val amount: Amount<Currency>, val issueRef: OpaqueBytes, prog
                 .toSet()
         // Sign transaction
         progressTracker.currentStep = SIGNING_TX
-        val tx = serviceHub.signInitialTransaction(builder, signers)
-
+        val stx = serviceHub.signInitialTransaction(builder, signers)
         // Commit the transaction
-        progressTracker.currentStep = FINALISING_TX
-        finaliseTx(participants, tx, "Unable to notarise exit")
-        return Result(tx, null)
+        finaliseTx(stx, "Unable to notarise exit", participants)
+        return stx
     }
 }

@@ -32,18 +32,6 @@ interface IdentityService {
      * Verify and then store an anonymous identity.
      *
      * @param anonymousIdentity an anonymised identity representing a legal entity in a transaction.
-     * @param party well known party the anonymised party must represent.
-     * @throws IllegalArgumentException if the certificate path is invalid, or if there is already an existing
-     * certificate chain for the anonymous party.
-     */
-    @Throws(CertificateExpiredException::class, CertificateNotYetValidException::class, InvalidAlgorithmParameterException::class)
-    @Deprecated("Use verifyAndRegisterAnonymousIdentity() instead, which is the same function with a better name")
-    fun registerAnonymousIdentity(anonymousIdentity: AnonymousPartyAndPath, party: Party): PartyAndCertificate
-
-    /**
-     * Verify and then store an anonymous identity.
-     *
-     * @param anonymousIdentity an anonymised identity representing a legal entity in a transaction.
      * @param wellKnownIdentity well known party the anonymised party must represent.
      * @throws IllegalArgumentException if the certificate path is invalid, or if there is already an existing
      * certificate chain for the anonymous party.
@@ -54,9 +42,8 @@ interface IdentityService {
     /**
      * Verify an anonymous identity.
      *
-     * @param anonymousParty a party representing a legal entity in a transaction.
+     * @param anonymousIdentity a party representing a legal entity in a transaction.
      * @param party well known party the anonymised party must represent.
-     * @param path certificate path from the trusted root to the party.
      * @return the full well known identity.
      * @throws IllegalArgumentException if the certificate path is invalid.
      */

@@ -330,11 +330,10 @@ class FlowFrameworkTests {
                 2000.DOLLARS,
                 OpaqueBytes.of(0x01),
                 node1.info.legalIdentity,
-                notary1.info.notaryIdentity,
-                anonymous = false))
+                notary1.info.notaryIdentity))
         // We pay a couple of times, the notary picking should go round robin
         for (i in 1..3) {
-            val flow = node1.services.startFlow(CashPaymentFlow(500.DOLLARS, node2.info.legalIdentity, anonymous = false))
+            val flow = node1.services.startFlow(CashPaymentFlow(500.DOLLARS, node2.info.legalIdentity))
             mockNet.runNetwork()
             flow.resultFuture.getOrThrow()
         }
@@ -388,6 +387,26 @@ class FlowFrameworkTests {
         assertThatExceptionOfType(UnexpectedFlowEndException::class.java).isThrownBy {
             resultFuture.getOrThrow()
         }.withMessageContaining(String::class.java.name)  // Make sure the exception message mentions the type the flow was expecting to receive
+    }
+
+    @Test
+    fun `asdasdjkasjdkajds `() {
+        node2.registerFlowFactory(SendThenSendAndReceiveFlow::class) { NoOpFlow() }
+        val resultFuture = node1.services.startFlow(SendThenSendAndReceiveFlow(node2.info.legalIdentity)).resultFuture
+        mockNet.runNetwork()
+        assertThatExceptionOfType(UnexpectedFlowEndException::class.java).isThrownBy {
+            resultFuture.getOrThrow()
+        }.withMessageContaining(String::class.java.name)
+    }
+
+    @InitiatingFlow
+    private class SendThenSendAndReceiveFlow(val otherParty: Party) : FlowLogic<Unit>() {
+        @Suspendable
+        override fun call() {
+            send(otherParty, 1)
+            Fiber.sleep(200)
+            sendAndReceive<String>(otherParty, 2)
+        }
     }
 
     @Test

@@ -6,13 +6,13 @@ import net.corda.core.contracts.*
 import net.corda.core.crypto.SecureHash
 import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.Party
+import net.corda.core.internal.Emoji
 import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.messaging.startFlow
 import net.corda.core.node.services.queryBy
-import net.corda.core.utilities.OpaqueBytes
 import net.corda.core.transactions.LedgerTransaction
 import net.corda.core.transactions.SignedTransaction
-import net.corda.core.internal.Emoji
+import net.corda.core.utilities.OpaqueBytes
 import net.corda.core.utilities.getOrThrow
 import net.corda.flows.CashIssueFlow
 import net.corda.node.internal.CordaRPCOpsImpl
@@ -173,10 +173,9 @@ class ContractUpgradeFlowTest {
     @Test
     fun `upgrade Cash to v2`() {
         // Create some cash.
-        val anonymous = false
-        val result = a.services.startFlow(CashIssueFlow(Amount(1000, USD), OpaqueBytes.of(1), a.info.legalIdentity, notary, anonymous)).resultFuture
+        val result = a.services.startFlow(CashIssueFlow(Amount(1000, USD), OpaqueBytes.of(1), a.info.legalIdentity, notary)).resultFuture
         mockNet.runNetwork()
-        val stx = result.getOrThrow().stx
+        val stx = result.getOrThrow()
         val stateAndRef = stx.tx.outRef<Cash.State>(0)
         val baseState = a.database.transaction { a.services.vaultQueryService.queryBy<ContractState>().states.single() }
         assertTrue(baseState.state.data is Cash.State, "Contract state is old version.")

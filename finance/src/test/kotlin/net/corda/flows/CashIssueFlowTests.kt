@@ -46,7 +46,7 @@ class CashIssueFlowTests {
                 bankOfCorda,
                 notary)).resultFuture
         mockNet.runNetwork()
-        val issueTx = future.getOrThrow().stx
+        val issueTx = future.getOrThrow()
         val output = issueTx.tx.outputsOfType<Cash.State>().single()
         assertEquals(expected.`issued by`(bankOfCorda.ref(ref)), output.amount)
     }

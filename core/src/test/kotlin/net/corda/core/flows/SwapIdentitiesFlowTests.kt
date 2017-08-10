@@ -1,22 +1,21 @@
 package net.corda.core.flows
 
+import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.identity.AbstractParty
-import net.corda.core.identity.AnonymousPartyAndPath
 import net.corda.core.identity.Party
 import net.corda.core.utilities.getOrThrow
 import net.corda.testing.ALICE
 import net.corda.testing.BOB
 import net.corda.testing.DUMMY_NOTARY
 import net.corda.testing.node.MockNetwork
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 
-class TransactionKeyFlowTests {
+class SwapIdentitiesFlowTests {
     @Test
-    fun `issue key`() {
+    fun `swap anonymous identities`() {
         // We run this in parallel threads to help catch any race conditions that may exist.
         val mockNet = MockNetwork(false, true)
 
@@ -31,15 +30,16 @@ class TransactionKeyFlowTests {
         bobNode.services.identityService.registerIdentity(aliceNode.info.legalIdentityAndCert)
         bobNode.services.identityService.registerIdentity(notaryNode.info.legalIdentityAndCert)
 
+        bobNode.registerInitiatedFlow(Acceptor::class.java)
+
         // Run the flows
-        val requesterFlow = aliceNode.services.startFlow(TransactionKeyFlow(bob))
+        val requesterFlow = aliceNode.services.startFlow(Initiator(bob))
 
         // Get the results
-        val actual: Map<Party, AnonymousPartyAndPath> = requesterFlow.resultFuture.getOrThrow().toMap()
-        assertEquals(2, actual.size)
+        val result = requesterFlow.resultFuture.getOrThrow()
         // Verify that the generated anonymous identities do not match the well known identities
-        val aliceAnonymousIdentity = actual[alice] ?: throw IllegalStateException()
-        val bobAnonymousIdentity = actual[bob] ?: throw IllegalStateException()
+        val aliceAnonymousIdentity = result.ourIdentity
+        val bobAnonymousIdentity = result.theirIdentity
         assertNotEquals<AbstractParty>(alice, aliceAnonymousIdentity.party)
         assertNotEquals<AbstractParty>(bob, bobAnonymousIdentity.party)
 
@@ -48,11 +48,28 @@ class TransactionKeyFlowTests {
         assertEquals(bob.name, bobAnonymousIdentity.name)
 
         // Verify that the nodes have the right anonymous identities
-        assertTrue { aliceAnonymousIdentity.party.owningKey in aliceNode.services.keyManagementService.keys }
-        assertTrue { bobAnonymousIdentity.party.owningKey in bobNode.services.keyManagementService.keys }
-        assertFalse { aliceAnonymousIdentity.party.owningKey in bobNode.services.keyManagementService.keys }
-        assertFalse { bobAnonymousIdentity.party.owningKey in aliceNode.services.keyManagementService.keys }
+        assertThat(aliceNode.services.keyManagementService.keys)
+                .contains(aliceAnonymousIdentity.party.owningKey)
+                .doesNotContain(bobAnonymousIdentity.party.owningKey)
+
+        assertThat(bobNode.services.keyManagementService.keys)
+                .contains(bobAnonymousIdentity.party.owningKey)
+                .doesNotContain(aliceAnonymousIdentity.party.owningKey)
 
         mockNet.stopNodes()
+    }
+
+    @InitiatingFlow
+    private class Initiator(val otherParty: Party) : FlowLogic<SwapIdentitiesFlow.Result>() {
+        @Suspendable
+        override fun call(): SwapIdentitiesFlow.Result = subFlow(SwapIdentitiesFlow(otherParty))
+    }
+
+    @InitiatedBy(Initiator::class)
+    private class Acceptor(val otherParty: Party) : FlowLogic<Unit>() {
+        @Suspendable
+        override fun call() {
+            subFlow(SwapIdentitiesFlow(otherParty))
+        }
     }
 }

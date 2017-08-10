@@ -29,8 +29,9 @@ import net.corda.core.utilities.toNonEmptySet
 import net.corda.flows.CashExitFlow
 import net.corda.flows.CashIssueFlow
 import net.corda.flows.CashPaymentFlow
-import net.corda.flows.IssuerFlow
-import net.corda.node.services.*
+import net.corda.node.services.ContractUpgradeHandler
+import net.corda.node.services.NotaryChangeHandler
+import net.corda.node.services.NotifyTransactionHandler
 import net.corda.node.services.api.*
 import net.corda.node.services.config.NodeConfiguration
 import net.corda.node.services.config.configureWithDevSSLCertificate
@@ -62,8 +63,6 @@ import net.corda.node.services.vault.NodeVaultService
 import net.corda.node.services.vault.VaultSoftLockManager
 import net.corda.node.utilities.*
 import net.corda.node.utilities.AddOrRemove.ADD
-import net.corda.node.utilities.AffinityExecutor
-import net.corda.node.utilities.configureDatabase
 import org.apache.activemq.artemis.utils.ReusableLatch
 import org.bouncycastle.asn1.x500.X500Name
 import org.slf4j.Logger
@@ -207,9 +206,6 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
                 registerInitiatedFlows(scanResult)
                 findRPCFlows(scanResult)
             }
-
-            // TODO Remove this once the cash stuff is in its own CorDapp
-            registerInitiatedFlow(IssuerFlow.Issuer::class.java)
 
             runOnStop += network::stop
             _networkMapRegistrationFuture.captureLater(registerWithNetworkMapIfConfigured())
@@ -402,7 +398,6 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
         installCoreFlow(BroadcastTransactionFlow::class) { otherParty, _ -> NotifyTransactionHandler(otherParty) }
         installCoreFlow(NotaryChangeFlow::class) { otherParty, _ -> NotaryChangeHandler(otherParty) }
         installCoreFlow(ContractUpgradeFlow::class) { otherParty, _ -> ContractUpgradeHandler(otherParty) }
-        installCoreFlow(TransactionKeyFlow::class) { otherParty, _ -> TransactionKeyHandler(otherParty) }
     }
 
     /**

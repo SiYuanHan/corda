@@ -10,10 +10,10 @@ import net.corda.core.flows.StateMachineRunId
 import net.corda.core.messaging.*
 import net.corda.core.node.services.ServiceInfo
 import net.corda.core.node.services.Vault
-import net.corda.core.transactions.SignedTransaction
-import net.corda.core.utilities.getOrThrow
 import net.corda.core.node.services.queryBy
+import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.OpaqueBytes
+import net.corda.core.utilities.getOrThrow
 import net.corda.flows.CashIssueFlow
 import net.corda.flows.CashPaymentFlow
 import net.corda.node.internal.CordaRPCOpsImpl
@@ -90,9 +90,8 @@ class CordaRPCOpsImplTest {
         }
 
         // Tell the monitoring service node to issue some cash
-        val anonymous = false
         val recipient = aliceNode.info.legalIdentity
-        val result = rpc.startFlow(::CashIssueFlow, Amount(quantity, GBP), ref, recipient, notaryNode.info.notaryIdentity, anonymous)
+        val result = rpc.startFlow(::CashIssueFlow, Amount(quantity, GBP), ref, recipient, notaryNode.info.notaryIdentity)
         mockNet.runNetwork()
 
         var issueSmId: StateMachineRunId? = null
@@ -127,18 +126,15 @@ class CordaRPCOpsImplTest {
 
     @Test
     fun `issue and move`() {
-        val anonymous = false
         val result = rpc.startFlow(::CashIssueFlow,
                 100.DOLLARS,
                 OpaqueBytes(ByteArray(1, { 1 })),
                 aliceNode.info.legalIdentity,
-                notaryNode.info.notaryIdentity,
-                false
-        )
+                notaryNode.info.notaryIdentity)
 
         mockNet.runNetwork()
 
-        rpc.startFlow(::CashPaymentFlow, 100.DOLLARS, aliceNode.info.legalIdentity, anonymous)
+        rpc.startFlow(::CashPaymentFlow, 100.DOLLARS, aliceNode.info.legalIdentity)
 
         mockNet.runNetwork()
 
@@ -212,9 +208,7 @@ class CordaRPCOpsImplTest {
                     Amount(100, USD),
                     OpaqueBytes(ByteArray(1, { 1 })),
                     aliceNode.info.legalIdentity,
-                    notaryNode.info.notaryIdentity,
-                    false
-            )
+                    notaryNode.info.notaryIdentity)
         }
     }
 
